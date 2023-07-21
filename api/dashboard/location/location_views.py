@@ -83,7 +83,7 @@ class CountryDataAPI(APIView):
             return CustomResponse(general_message="Country updated Successfully").get_success_response()
         return CustomResponse(general_message=serializer.errors).get_failure_response()
 
-    @role_required(roles=[RoleType.ADMIN, ])
+    @role_required(roles=[RoleType.ADMIN.value, ])
     def delete(self, request):
         country = Country.objects.filter(name=request.data.get('name')).first()
         if not country:
@@ -386,7 +386,7 @@ class DistrictDataAPI(APIView):
         return CustomResponse().paginated_response(data=required_data, pagination=paginated_queryset.get('pagination'))
         # return CustomResponse().paginated_response(data=serializer.data, pagination=paginated_queryset.get('pagination'))
 
-    @role_required(roles=[RoleType.ADMIN, ])
+    @role_required(roles=[RoleType.ADMIN.value, ])
     def post(self, request, country, state, zone):
         user_id = JWTUtils.fetch_user_id(request)
         if not user_id:

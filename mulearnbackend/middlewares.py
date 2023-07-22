@@ -5,7 +5,11 @@ import decouple
 from django.http import JsonResponse
 from rest_framework import status
 
-from utils.utils import _CustomHTTPHandler
+from utils.utils import _CustomHTTPHandler, DateTimeUtils
+from utils.response import CustomResponse
+from utils.permission import JWTUtils
+from django.core.cache import cache
+import time
 
 logger = logging.getLogger(__name__)
 
@@ -64,3 +68,27 @@ class ApiSignatureMiddleware(object):
                 )
         response = self.get_response(request)
         return response
+
+
+class DeviceCheck(object):
+    def __init__(self, get_response):
+        self.get_response = get_response
+
+    def __call__(self, request):
+        if request.path == "/api/v1/register/":
+            return self.get_response(request)
+
+        device_id = JWTUtils.fetch_device_id(request)
+
+        # Performance check
+        redis_start_time = time.time()
+        device = cache.get(f"Device:{device_id}")
+        redis_end_time = time.time()
+        elapsed_redis_time = redis_end_time - redis_start_time
+        print(f"Redis Elapsed Time: {elapsed_redis_time} sec")
+
+        if device:
+            cache.set(key=f"Device:{device_id}", value=str(DateTimeUtils.get_current_utc_time()), timeout=None)
+            return self.get_response(request)
+        else:
+            return CustomResponse(general_message="Device logged out").get_failure_response()

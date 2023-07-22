@@ -49,7 +49,8 @@ class RegisterDataAPI(APIView):
 
         response = requests.post(
             f"{auth_domain}/api/v1/auth/user-authentication/",
-            data={"emailOrMuid": user_obj.mu_id, "password": password},
+            data={"emailOrMuid": user_obj.mu_id, "password": password,
+                  "httpUserAgent": request.data.get("httpUserAgent")},
         )
         response = response.json()
         if response.get("statusCode") != 200:
@@ -60,8 +61,8 @@ class RegisterDataAPI(APIView):
         access_token = res_data.get("accessToken")
         refresh_token = res_data.get("refreshToken")
 
-        send_mail("Congrats, You have been successfully registered in μlearn", f" Your Muid {user_obj.mu_id}",
-                  decouple.config("EMAIL_HOST_USER"), [user_obj.email], fail_silently=False)
+        # send_mail("Congrats, You have been successfully registered in μlearn", f" Your Muid {user_obj.mu_id}",
+        #           decouple.config("EMAIL_HOST_USER"), [user_obj.email], fail_silently=False)
 
         return CustomResponse(
             response={

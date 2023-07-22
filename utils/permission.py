@@ -13,6 +13,7 @@ from mulearnbackend.settings import SECRET_KEY
 from utils.utils import DateTimeUtils
 from .exception import CustomException
 from .response import CustomResponse
+from django.core.cache import cache
 
 
 # def get_current_utc_time():
@@ -65,6 +66,19 @@ class CustomizePermission(BasePermission):
 
 
 class JWTUtils:
+    @staticmethod
+    def fetch_device_id(request):
+        token = authentication.get_authorization_header(request).decode("utf-8").split()
+        payload = jwt.decode(
+            token[1], settings.SECRET_KEY, algorithms=["HS256"], verify=True
+        )
+        device_id = payload.get("uniqueDeviceId")
+        if device_id is None:
+            raise Exception(
+                "The corresponding JWT token does not contain the 'device_id' key"
+            )
+        return device_id
+
     @staticmethod
     def fetch_role(request):
         token = authentication.get_authorization_header(request).decode("utf-8").split()

@@ -2,7 +2,7 @@ from datetime import datetime
 
 from rest_framework.views import APIView
 
-from db.hackathon import Hackathon, HackathonOrganiserLink, HackathonUserSubmission
+from db.hackathon import Hackathon, HackathonOrganiserLink, HackathonUserSubmission, HackathonForm
 from db.organization import District
 from db.organization import Organization
 from utils.permission import CustomizePermission, role_required, JWTUtils
@@ -13,7 +13,7 @@ from .serializer import (HackathonCreateUpdateDeleteSerializer, HackathonRetriva
                          HackathonUpdateSerializer, HackathonUserSubmissionSerializer,
                          UpcomingHackathonRetrivalSerializer, HackathonOrganiserSerializer,
                          HackathonPublishingSerializer, ListApplicantsSerializer, HackathonInfoSerializer,
-                         OrganisationSerializer, DistrictSerializer)
+                         OrganisationSerializer, DistrictSerializer, HackathonFormSerializer)
 
 
 class HackathonManagementAPI(APIView):
@@ -161,6 +161,8 @@ class HackathonOrganiserAPI(APIView):
 
 
 class ListOrganisations(APIView):
+    authentication_classes = [CustomizePermission]
+
     @role_required([RoleType.ADMIN.value, ])
     def get(self, request):
         organisations = Organization.objects.all()
@@ -169,8 +171,23 @@ class ListOrganisations(APIView):
 
 
 class ListDistricts(APIView):
+    authentication_classes = [CustomizePermission]
+
     @role_required([RoleType.ADMIN.value, ])
     def get(self, request):
         districts = District.objects.all()
         serializer = DistrictSerializer(districts, many=True)
+        return CustomResponse(response=serializer.data).get_success_response()
+
+
+class ListHackathonFormAPI(APIView):
+    authentication_classes = [CustomizePermission]
+
+    @role_required([RoleType.ADMIN.value, ])
+    def get(self, request, hackathon_id):
+        hackathon = Hackathon.objects.filter(id=hackathon_id).first()
+        if hackathon is None:
+            return CustomResponse(general_message='Hackathon Does Not Exist').get_failure_response()
+        hackathon_form = HackathonForm.objects.filter(hackathon=hackathon)
+        serializer = HackathonFormSerializer(hackathon_form, many=True)
         return CustomResponse(response=serializer.data).get_success_response()

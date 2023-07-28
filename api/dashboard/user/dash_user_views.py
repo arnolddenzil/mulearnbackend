@@ -10,11 +10,13 @@ from django.db.models import Case, CharField, F, Q, Value, When
 from django.utils.html import strip_tags
 from rest_framework.views import APIView
 
+from api.dashboard.user.dash_user_helper import mulearn_mails
 from db.user import ForgotPassword, User, UserRoleLink
 from utils.permission import CustomizePermission, JWTUtils, role_required
 from utils.response import CustomResponse
 from utils.types import OrganizationType, RoleType
 from utils.utils import CommonUtils, DateTimeUtils
+
 from . import dash_user_serializer
 
 
@@ -37,7 +39,7 @@ class UserInfoAPI(APIView):
 class UserEditAPI(APIView):
     authentication_classes = [CustomizePermission]
 
-    @role_required([RoleType.ADMIN.value, ])
+    @role_required([RoleType.ADMIN.value,])
     def get(self, request, user_id):
         user = (
             User.objects.filter(id=user_id)
@@ -47,7 +49,7 @@ class UserEditAPI(APIView):
         serializer = dash_user_serializer.UserEditSerializer(user)
         return CustomResponse(response=serializer.data).get_success_response()
 
-    @role_required([RoleType.ADMIN.value], allow_self_edit=True)
+    @role_required([RoleType.ADMIN.value])
     def delete(self, request, user_id):
         try:
             user = User.objects.get(id=user_id)
@@ -60,7 +62,7 @@ class UserEditAPI(APIView):
         except ObjectDoesNotExist as e:
             return CustomResponse(general_message=str(e)).get_failure_response()
 
-    @role_required([RoleType.ADMIN.value], allow_self_edit=True)
+    @role_required([RoleType.ADMIN.value])
     def patch(self, request, user_id):
         try:
             user = User.objects.get(id=user_id)
@@ -81,7 +83,7 @@ class UserEditAPI(APIView):
 class UserAPI(APIView):
     authentication_classes = [CustomizePermission]
 
-    @role_required([RoleType.ADMIN.value], allow_self_edit=True)
+    @role_required([RoleType.ADMIN.value])
     def get(self, request, user_id=None):
         user_queryset = User.objects.annotate(
             total_karma=Case(
@@ -140,11 +142,11 @@ class UserAPI(APIView):
                 request,
                 ["mu_id", "first_name", "last_name", "email", "mobile", "discord_id"],
                 {
-                    'first_name': 'first_name',
-                    'total_karma': 'total_karma',
-                    'email': 'email',
-                    'created_at': 'created_at'
-                }
+                    "first_name": "first_name",
+                    "total_karma": "total_karma",
+                    "email": "email",
+                    "created_at": "created_at",
+                },
             )
             serializer = dash_user_serializer.UserDashboardSerializer(
                 queryset.get("queryset"), many=True
@@ -158,7 +160,7 @@ class UserAPI(APIView):
 class UserManagementCSV(APIView):
     authentication_classes = [CustomizePermission]
 
-    @role_required([RoleType.ADMIN.value], allow_self_edit=True)
+    @role_required([RoleType.ADMIN.value])
     def get(self, request):
         user_queryset = User.objects.annotate(
             total_karma=Case(
@@ -209,14 +211,14 @@ class UserManagementCSV(APIView):
 class UserVerificationAPI(APIView):
     authentication_classes = [CustomizePermission]
 
-    @role_required([RoleType.ADMIN.value], allow_self_edit=True)
+    @role_required([RoleType.ADMIN.value])
     def get(self, request):
         user_queryset = UserRoleLink.objects.filter(verified=False)
         queryset = CommonUtils.get_paginated_queryset(
             user_queryset,
             request,
             ["user__first_name", "user__last_name", "role__title"],
-            {'fullname': 'fullname'}      
+            {"fullname": "fullname"},
         )
         serializer = dash_user_serializer.UserVerificationSerializer(
             queryset.get("queryset"), many=True
@@ -226,33 +228,36 @@ class UserVerificationAPI(APIView):
             data=serializer.data, pagination=queryset.get("pagination")
         )
 
-    @role_required([RoleType.ADMIN.value], allow_self_edit=True)
+    @role_required([RoleType.ADMIN.value])
     def patch(self, request, link_id):
         try:
             user = UserRoleLink.objects.get(id=link_id)
         except ObjectDoesNotExist as e:
             return CustomResponse(general_message=str(e)).get_failure_response()
 
-        serializer = dash_user_serializer.UserVerificationSerializer(
+        user_serializer = dash_user_serializer.UserVerificationSerializer(
             user, data=request.data, partial=True
         )
 
-        if not serializer.is_valid():
+        if not user_serializer.is_valid():
             return CustomResponse(
-                response={"user_role_link": serializer.errors}
+                response={"user_role_link": user_serializer.errors}
             ).get_failure_response()
         try:
-            serializer.save()
-            return CustomResponse(
-                response={"user_role_link": serializer.data}
-            ).get_success_response()
+            user_serializer.save()
+            user_data = user_serializer.data
 
+            mulearn_mails().send_mail_mentor(user_data)
+
+            return CustomResponse(
+                response={"user_role_link": user_data}
+            ).get_success_response()
         except IntegrityError as e:
             return CustomResponse(
                 response={"user_role_link": str(e)}
             ).get_failure_response()
 
-    @role_required([RoleType.ADMIN.value], allow_self_edit=True)
+    @role_required([RoleType.ADMIN.value])
     def delete(self, request, link_id):
         try:
             link = UserRoleLink.objects.get(id=link_id)
@@ -270,9 +275,9 @@ class ForgotPasswordAPI(APIView):
         email_muid = request.data.get("emailOrMuid")
 
         if not (
-                user := User.objects.filter(
-                    Q(mu_id=email_muid) | Q(email=email_muid)
-                ).first()
+            user := User.objects.filter(
+                Q(mu_id=email_muid) | Q(email=email_muid)
+            ).first()
         ):
             return CustomResponse(
                 general_message="User not exist"
@@ -287,7 +292,7 @@ class ForgotPasswordAPI(APIView):
 
         domain = decouple.config("FR_DOMAIN_NAME")
         html_message = f"""
-      <!DOCTYPE html>
+     <!DOCTYPE html>
 <html lang="en">
 
 <head>
@@ -313,17 +318,20 @@ class ForgotPasswordAPI(APIView):
 
                 <div style="background: transparent;width: 100%;height: 170px;">
                     <center>
-                        <h1 style="color: black;font-family: 'Poppins';font-weight: 600;font-size: 30px;">REFRESH YOUR SECRETS</h1>
-                        <P style="color: rgb(65, 64, 64);font-family: 'Poppins';line-height: 1.2;font-size: 13px;">Hey there, we got a request to fix up your password!
-                        Don't worry, click the button below to reset your password!
-</P>
+                        <h1 style="color: black;font-family: 'Poppins';font-weight: 600;font-size: 30px;">REFRESH YOUR
+                            SECRETS</h1>
+                        <P style="color: rgb(65, 64, 64);font-family: 'Poppins';line-height: 1.2;font-size: 13px;">Hey
+                            there, we got a request to fix up your password!
+                            Don't worry, click the button below to reset your password!
+                        </P>
                         <div style="width: 100%;height: 10px;background: transparent;"></div>
 
-                        <a href="{domain}/reset-password?token={forget_user.id}/" style="width:160px;height: 40px;">
-
+                    
+                        <a href="{domain}/reset-password?token={forget_user.id}/" style="width:160px;height: 40px;"> 
                             <img style="width:160px;height: 40px;" src="https://iili.io/HQFXsFp.png" alt=""></a>
                         <div style="width: 100%;height: 10px;background: transparent;"></div>
-                        <p style="color: black;font-family: 'Poppins';line-height: 1.2;font-size: 13px;">Didn't request a password reset? You can ignore this email then.</p>
+                        <p style="color: black;font-family: 'Poppins';line-height: 1.2;font-size: 13px;">Didn't request
+                            a password reset? You can ignore this email then.</p>
                     </center>
                 </div>
                 <div style="background: transparent;width: 100%;height: 100px;"></div>
@@ -338,19 +346,20 @@ class ForgotPasswordAPI(APIView):
                         <div style="background:transparent ;width: 370px;height: 10px;"></div>
                         <div style="background:transparent ;width: 100px;display: flex;">
 
-                            <a style="width: 20px;height: 20px;" href="https://www.linkedin.com/"><img
+                            <a style="width: 20px;height: 20px;" href="https://www.linkedin.com/company/mulearn/"><img
                                     style="width: 15px;height: 15px;" src="https://i.ibb.co/RYr8YHc/linkedin.png"
                                     alt="linkedin" border="0"></a>
                             <div style="width: 20px;height: 20px; background: transparent"></div>
-                            <a style="width: 20px;height: 20px;" href="https://www.instagram.com/"><img
+                            <a style="width: 20px;height: 20px;" href="https://www.instagram.com/gtechmulearn/"><img
                                     style="width: 15px;height: 15px;" src="https://i.ibb.co/tJxZw29/insta.png"
                                     alt="insta" border="0"></a>
                             <div style="width: 20px;height: 20px; background: transparent"></div>
-                            <a style="width: 20px;height: 20px;" href="https://twitter.com/"><img
+                            <a style="width: 20px;height: 20px;" href="https://twitter.com/GtechMulearn"><img
                                     style="width: 15px;height: 15px;" src="https://i.ibb.co/MCnV8jP/twitter.png"
                                     alt="twitter" border="0"></a>
                         </div>
-                        <p style="font-family: 'Poppins';line-height: 1.2;font-size: 13px;">µLearn Foundation | Copyright © 2023. All rights reserved</p>
+                        <p style="font-family: 'Poppins';line-height: 1.2;font-size: 13px;">µLearn Foundation |
+                            Copyright © 2023. All rights reserved</p>
                     </center>
                 </div>
                 <div style="background: transparent;width: 100%;height: 20px;"></div>
@@ -440,3 +449,6 @@ class UserInviteAPI(APIView):
         return CustomResponse(
             general_message="Invitation sent successfully"
         ).get_success_response()
+
+
+

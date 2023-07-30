@@ -10,6 +10,7 @@ from utils.response import CustomResponse
 from utils.permission import JWTUtils
 from django.core.cache import cache
 import time
+from db.device import Device
 
 logger = logging.getLogger(__name__)
 
@@ -79,16 +80,20 @@ class DeviceCheck(object):
             return self.get_response(request)
 
         device_id = JWTUtils.fetch_device_id(request)
-
         # Performance check
         redis_start_time = time.time()
-        device = cache.get(f"Device:{device_id}")
+        device_cache = cache.get(f"Device:{device_id}")
         redis_end_time = time.time()
         elapsed_redis_time = redis_end_time - redis_start_time
-        print(f"Redis Elapsed Time: {elapsed_redis_time} sec")
+        print(f"Redis Fetch Time: {elapsed_redis_time} sec")
 
-        if device:
+        if not device_cache:
+            device = Device.objects.filter(id=device_id).first()
+            if not device:
+                return CustomResponse(general_message="Device logged out").get_failure_response()
+            redis_set_start_time = time.time()
             cache.set(key=f"Device:{device_id}", value=str(DateTimeUtils.get_current_utc_time()), timeout=None)
-            return self.get_response(request)
-        else:
-            return CustomResponse(general_message="Device logged out").get_failure_response()
+            redis_set_end_time = time.time()
+            elapsed_redis_set_time = redis_set_end_time - redis_set_start_time
+            print(f"Redis Set Time: {elapsed_redis_set_time} sec")
+        return self.get_response(request)
